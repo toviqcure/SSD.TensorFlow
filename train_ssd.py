@@ -105,7 +105,7 @@ tf.app.flags.DEFINE_string(
 # checkpoint related configuration
 tf.app.flags.DEFINE_string(
     'checkpoint_path', './model',
-    'The path to a checkpoint from which to fine-tune.')
+    'The path to a checkpoint from which to fine-tune. If it is None, training model from scratch.')
 tf.app.flags.DEFINE_string(
     'checkpoint_model_scope', 'vgg_16',
     'Model scope in the checkpoint. None if the same as the trained model.')
