@@ -25,6 +25,9 @@ def get_init_fn_for_scaffold(model_dir, checkpoint_path, model_scope, checkpoint
     if tf.train.latest_checkpoint(model_dir):
         tf.logging.info('Ignoring --checkpoint_path because a checkpoint already exists in %s.' % model_dir)
         return None
+    if checkpoint_path is None:
+        tf.logging.info('Training detector from scratch.')
+        return None
     exclusion_scopes = []
     if checkpoint_exclude_scopes:
         exclusion_scopes = [scope.strip() for scope in checkpoint_exclude_scopes.split(',')]
