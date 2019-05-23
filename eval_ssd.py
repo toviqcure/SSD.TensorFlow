@@ -23,7 +23,7 @@ import tensorflow as tf
 
 import numpy as np
 
-from net import ssd_net
+from net import ssd_net, ssd_net_512
 
 from dataset import dataset_common
 from preprocessing import ssd_preprocessing
@@ -103,6 +103,9 @@ tf.app.flags.DEFINE_string(
 FLAGS = tf.app.flags.FLAGS
 #CUDA_VISIBLE_DEVICES
 
+if FLAGS.train_image_size == 512:
+    ssd_net = ssd_net_512
+
 def get_checkpoint():
     if tf.train.latest_checkpoint(FLAGS.model_dir):
         tf.logging.info('Ignoring --checkpoint_path because a checkpoint already exists in %s' % FLAGS.model_dir)
@@ -124,20 +127,29 @@ global_anchor_info = dict()
 def input_pipeline(dataset_pattern='train-*', is_training=True, batch_size=FLAGS.batch_size):
     def input_fn():
         out_shape = [FLAGS.train_image_size] * 2
-        anchor_creator = anchor_manipulator.AnchorCreator(out_shape,
-                                                    layers_shapes = [(38, 38), (19, 19), (10, 10), (5, 5), (3, 3), (1, 1)],
-                                                    anchor_scales = [(0.1,), (0.2,), (0.375,), (0.55,), (0.725,), (0.9,)],
-                                                    extra_anchor_scales = [(0.1414,), (0.2739,), (0.4541,), (0.6315,), (0.8078,), (0.9836,)],
-                                                    anchor_ratios = [(1., 2., .5), (1., 2., 3., .5, 0.3333), (1., 2., 3., .5, 0.3333), (1., 2., 3., .5, 0.3333), (1., 2., .5), (1., 2., .5)],
-                                                    #anchor_ratios = [(2., .5), (2., 3., .5, 0.3333), (2., 3., .5, 0.3333), (2., 3., .5, 0.3333), (2., .5), (2., .5)],
-                                                    layer_steps = [8, 16, 32, 64, 100, 300])
+        ssd300_anchor_params = {'layers_shapes': [(38, 38), (19, 19), (10, 10), (5, 5), (3, 3), (1, 1)], 'anchor_scales': [(0.1,), (0.2,), (0.375,), (0.55,), (0.725,), (0.9,)],
+                                                    'extra_anchor_scales': [(0.1414,), (0.2739,), (0.4541,), (0.6315,), (0.8078,), (0.9836,)],
+                                                    'anchor_ratios': [(1., 2., .5), (1., 2., 3., .5, 0.3333), (1., 2., 3., .5, 0.3333), (1., 2., 3., .5, 0.3333), (1., 2., .5), (1., 2., .5)],
+                                                    'layer_steps': [8, 16, 32, 64, 100, 300]}
+        ssd512_anchor_params = {'layers_shapes': [(64, 64), (32, 32), (16, 16), (8, 8), (4, 4), (2, 2), (1, 1)],
+                                                    'anchor_scales': [(0.07,), (0.15,), (0.3,), (0.45,), (0.6,), (0.75,), (0.9,)],
+                                                    'extra_anchor_scales': [(0.1025,), (0.2121,), (0.3674,), (0.5196,), (0.6708,), (0.8216,), (0.9721,)],
+                                                    'anchor_ratios': [(1., 2., .5), (1., 2., 3., .5, 0.3333), (1., 2., 3., .5, 0.3333), (1., 2., 3., .5, 0.3333), (1., 2., 3., .5, 0.3333), (1., 2., .5), (1., 2., .5)],
+                                                    'layer_steps': [8, 16, 32, 64, 128, 256, 512]}
+        if FLAGS.train_image_size == 512:
+            net_params = ssd512_anchor_params
+            print('using ssd512 model')
+        else:
+            net_params = ssd300_anchor_params
+            print('using ssd300 model')
+        anchor_creator = anchor_manipulator.AnchorCreator(out_shape, **net_params)
         all_anchors, all_num_anchors_depth, all_num_anchors_spatial = anchor_creator.get_all_anchors()
 
         num_anchors_per_layer = []
         for ind in range(len(all_anchors)):
             num_anchors_per_layer.append(all_num_anchors_depth[ind] * all_num_anchors_spatial[ind])
 
-        anchor_encoder_decoder = anchor_manipulator.AnchorEncoder(allowed_borders = [1.0] * 6,
+        anchor_encoder_decoder = anchor_manipulator.AnchorEncoder(allowed_borders = [1.0] * len(net_params['layer_steps']),
                                                             positive_threshold = FLAGS.match_threshold,
                                                             ignore_threshold = FLAGS.neg_threshold,
                                                             prior_scaling=[0.1, 0.1, 0.2, 0.2])
